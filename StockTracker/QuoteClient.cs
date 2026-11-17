@@ -29,11 +29,16 @@ public class QuoteClient
 
         JsonElement root = json.RootElement;
 
+        
         if (!root.TryGetProperty("results", out JsonElement results) ||
-            results.ValueKind != JsonValueKind.Array ||
-            results.GetArrayLength() == 0)
+            results.ValueKind != JsonValueKind.Array)
         {
-            throw new InvalidOperationException("Nenhuma cotação encontrada.");
+            throw new JsonException("Resposta inválida da brapi.");
+        }
+
+        if (results.GetArrayLength() == 0)
+        {
+            throw new KeyNotFoundException($"Nenhuma cotação encontrada para {ativo}.");
         }
 
         JsonElement quote = results[0];

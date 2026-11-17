@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 
 public class PriceMonitor
 {
@@ -69,9 +70,34 @@ public class PriceMonitor
                     Logger.Alert($"Alerta de {action} de {_ativo} processado.");
                 }
             }
+            
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (HttpRequestException ex) when (
+                ex.StatusCode is HttpStatusCode.BadRequest or
+                                HttpStatusCode.Unauthorized or
+                                HttpStatusCode.Forbidden or
+                                HttpStatusCode.NotFound)
+            {
+                throw new InvalidOperationException(
+                    $"A brapi recusou a consulta de {_ativo} (HTTP {ex.StatusCode}). " +
+                    "Verifique o ativo e a BRAPI_API_KEY.", ex);
+            }
+            catch (KeyNotFoundException)
+            {
+                throw;
+            }
+            catch (MailKit.Security.AuthenticationException ex)
+            {
+                throw new InvalidOperationException(
+                    "Autenticação SMTP rejeitada. Verifique o usuário e a SMTP_PASSWORD.", ex);
+            }
             catch (Exception ex)
             {
                 Logger.Error($"Falha ao monitorar {_ativo}: {ex.Message}");
+                Logger.Info($"Nova tentativa em {_interval.TotalSeconds:0} segundos.");
             }
 
             if (maxConsultas.HasValue && consultas >= maxConsultas.Value)

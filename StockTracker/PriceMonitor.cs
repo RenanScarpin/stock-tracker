@@ -1,35 +1,41 @@
+using System.Globalization;
 
 public class PriceMonitor
 {
-    private readonly QuoteClient _quoteClient;
+    private readonly Func<Task<decimal>> _getPriceAsync;
+    private readonly Func<string, string, Task> _sendEmailAsync;
     private readonly PriceAlert _priceAlert;
-    private readonly EmailSender _emailSender;
     private readonly string _ativo;
     private readonly TimeSpan _interval;
 
     public PriceMonitor(
-        QuoteClient quoteClient,
-        PriceAlert priceAlert,
-        EmailSender emailSender,
         string ativo,
-        TimeSpan interval)
+        PriceAlert priceAlert,
+        TimeSpan interval,
+        Func<Task<decimal>> getPriceAsync,
+        Func<string, string, Task> sendEmailAsync)
     {
-        _quoteClient = quoteClient;
-        _priceAlert = priceAlert;
-        _emailSender = emailSender;
         _ativo = ativo;
+        _priceAlert = priceAlert;
         _interval = interval;
+        _getPriceAsync = getPriceAsync;
+        _sendEmailAsync = sendEmailAsync;
     }
 
-    public async Task RunAsync(CancellationToken cancellationToken)
+    public async Task RunAsync(CancellationToken cancellationToken, int? maxConsultas = null)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        int consultas = 0;
+
+        while (!cancellationToken.IsCancellationRequested &&
+               (!maxConsultas.HasValue || consultas < maxConsultas.Value))
         {
+            consultas++;
+
             try
             {
-                decimal price = await _quoteClient.GetPriceAsync(_ativo);
+                decimal price = await _getPriceAsync();
 
-                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {_ativo}: R$ {price:F2}");
+                Logger.Info($"{_ativo}: R$ {price:F2}");
 
                 if (cancellationToken.IsCancellationRequested)
                     break;
@@ -38,23 +44,38 @@ public class PriceMonitor
 
                 if (alert != AlertType.None)
                 {
-                    string action = alert == AlertType.Sell ? "venda" : "compra";
+                    bool sell = alert == AlertType.Sell;
 
-                    string subject = $"Alerta de {action}: {_ativo}";
-                    string body = $"O ativo {_ativo} atingiu R$ {price:F2}.\n" +
-                                  $"Considere realizar uma operação de {action}.";
+                    string action = sell ? "venda" : "compra";
+                    decimal limit = sell ? _priceAlert.SellPrice : _priceAlert.BuyPrice;
+                    decimal variation = (price - limit) / limit * 100m;
 
-                    await _emailSender.SendAsync(subject, body);
+                    CultureInfo culture = CultureInfo.GetCultureInfo("pt-BR");
+
+                    string subject = $"StockTracker | Alerta de {action}: {_ativo}";
+
+                    string body =
+                        $"Ativo: {_ativo}\n" +
+                        $"Cotação consultada: {price.ToString("C2", culture)}\n" +
+                        $"Limite de {action}: {limit.ToString("C2", culture)}\n" +
+                        $"Diferença em relação ao limite: {variation.ToString("+0.00;-0.00;0.00", culture)}%\n" +
+                        $"Horário da consulta: {DateTime.Now:dd/MM/yyyy HH:mm:ss}\n\n" +
+                        $"Considere avaliar uma operação de {action}.";
+
+                    await _sendEmailAsync(subject, body);
 
                     _priceAlert.MarkAsSent();
 
-                    Console.WriteLine($"Alerta de {action} enviado!");
+                    Logger.Alert($"Alerta de {action} de {_ativo} processado.");
                 }
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Erro no monitoramento: {ex.Message}");
+                Logger.Error($"Falha ao monitorar {_ativo}: {ex.Message}");
             }
+
+            if (maxConsultas.HasValue && consultas >= maxConsultas.Value)
+                break;
 
             await Task.Delay(_interval, cancellationToken);
         }

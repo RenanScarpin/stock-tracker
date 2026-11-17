@@ -13,6 +13,9 @@ public class PriceAlert
     private AlertType _currentZone = AlertType.None;
     private bool _alertSent = false;
 
+    public decimal SellPrice => _sellPrice;
+    public decimal BuyPrice => _buyPrice;
+
     public PriceAlert(decimal sellPrice, decimal buyPrice)
     {
         _sellPrice = sellPrice;

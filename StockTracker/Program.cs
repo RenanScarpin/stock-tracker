@@ -202,11 +202,11 @@ try
     PriceAlert priceAlert = new PriceAlert(precoVenda, precoCompra);
 
     PriceMonitor monitor = new PriceMonitor(
-        quoteClient,
-        priceAlert,
-        emailSender,
         ativo,
-        TimeSpan.FromSeconds(seconds)
+        priceAlert,
+        TimeSpan.FromSeconds(seconds),
+        () => quoteClient.GetPriceAsync(ativo),
+        (subject, body) => emailSender.SendAsync(subject, body)
     );
 
     // Configura o encerramento com Ctrl+C
@@ -218,7 +218,7 @@ try
         cancellation.Cancel();
     };
 
-    Console.WriteLine("\nMonitoramento iniciado. Pressione Ctrl+C para encerrar.\n");
+    Logger.Info("Monitoramento iniciado. Pressione Ctrl+C para encerrar.");
 
     try
     {
@@ -229,11 +229,11 @@ try
         // Encerramento solicitado pelo usuário
     }
 
-    Console.WriteLine("Monitoramento encerrado.");
+    Logger.Info("Monitoramento encerrado.");
     return 0;
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"Erro ao iniciar monitoramento: {ex.Message}");
+    Logger.Error($"Erro ao iniciar monitoramento: {ex.Message}");
     return 1;
 }

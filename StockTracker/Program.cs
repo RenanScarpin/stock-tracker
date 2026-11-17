@@ -1,8 +1,14 @@
 ﻿using System.Globalization;
 using System.Text.Json;
 
-if (File.Exists(".env"))
-    DotNetEnv.Env.Load();
+string envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+
+if (!File.Exists(envPath))
+    envPath = Path.Combine(AppContext.BaseDirectory, ".env");
+
+if (File.Exists(envPath))
+    DotNetEnv.Env.Load(envPath);
+
 
 // Teste da lógica de alertas
 if (args.Length == 1 && args[0] == "--test-alerts")

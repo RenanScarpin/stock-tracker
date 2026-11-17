@@ -197,7 +197,8 @@ try
     using HttpClient httpClient = new HttpClient();
     httpClient.Timeout = TimeSpan.FromSeconds(10);
 
-    QuoteClient quoteClient = new QuoteClient(httpClient);
+    string? apiKey = Environment.GetEnvironmentVariable("BRAPI_API_KEY");
+    QuoteClient quoteClient = new QuoteClient(httpClient, apiKey);
     EmailSender emailSender = new EmailSender(settings, password);
     PriceAlert priceAlert = new PriceAlert(precoVenda, precoCompra);
 

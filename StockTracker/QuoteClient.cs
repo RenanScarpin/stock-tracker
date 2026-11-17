@@ -1,20 +1,27 @@
-
 using System.Text.Json;
+using System.Net.Http.Headers;
 
 public class QuoteClient
 {
     private readonly HttpClient _httpClient;
+    private readonly string? _apiKey;
 
-    public QuoteClient(HttpClient httpClient)
+    public QuoteClient(HttpClient httpClient, string? apiKey = null)
     {
         _httpClient = httpClient;
+        _apiKey = apiKey;
     }
 
     public async Task<decimal> GetPriceAsync(string ativo)
     {
         string url = $"https://brapi.dev/api/v2/stocks/quote?symbols={ativo}";
 
-        using HttpResponseMessage response = await _httpClient.GetAsync(url);
+        using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url);
+
+        if (!string.IsNullOrWhiteSpace(_apiKey))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+
+        using HttpResponseMessage response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         using Stream stream = await response.Content.ReadAsStreamAsync();

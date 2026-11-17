@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Text.Json;
 
+// Localizando .env
 string envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
 
 if (!File.Exists(envPath))
@@ -8,7 +9,6 @@ if (!File.Exists(envPath))
 
 if (File.Exists(envPath))
     DotNetEnv.Env.Load(envPath);
-
 
 // Teste da lógica de alertas
 if (args.Length == 1 && args[0] == "--test-alerts")
@@ -40,29 +40,7 @@ if (args.Length == 1 && args[0] == "--test-email")
 {
     try
     {
-        string path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-        string json = await File.ReadAllTextAsync(path);
-
-        EmailSettings? settings = JsonSerializer.Deserialize<EmailSettings>(json);
-
-        if (settings is null ||
-            string.IsNullOrWhiteSpace(settings.To) ||
-            string.IsNullOrWhiteSpace(settings.From) ||
-            string.IsNullOrWhiteSpace(settings.Host) ||
-            string.IsNullOrWhiteSpace(settings.Username) ||
-            settings.Port <= 0)
-        {
-            throw new InvalidOperationException("Configuração SMTP inválida.");
-        }
-
-        string? password = Environment.GetEnvironmentVariable("SMTP_PASSWORD");
-
-        if (string.IsNullOrWhiteSpace(password))
-        {
-            throw new InvalidOperationException("Variável SMTP_PASSWORD não definida.");
-        }
-
-        EmailSender sender = new EmailSender(settings, password);
+        EmailSender sender = await CreateEmailSenderAsync();
 
         await sender.SendAsync(
             "Teste StockTracker",
@@ -173,25 +151,7 @@ if (simulate)
 try
 {
     // Carrega as configurações SMTP
-    string path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-    string json = await File.ReadAllTextAsync(path);
-
-    EmailSettings settings = JsonSerializer.Deserialize<EmailSettings>(json)
-        ?? throw new InvalidOperationException("Configuração SMTP inválida.");
-
-    if (string.IsNullOrWhiteSpace(settings.To) ||
-        string.IsNullOrWhiteSpace(settings.From) ||
-        string.IsNullOrWhiteSpace(settings.Host) ||
-        string.IsNullOrWhiteSpace(settings.Username) ||
-        settings.Port <= 0)
-    {
-        throw new InvalidOperationException("Configuração SMTP inválida.");
-    }
-
-    string? password = Environment.GetEnvironmentVariable("SMTP_PASSWORD");
-
-    if (string.IsNullOrWhiteSpace(password))
-        throw new InvalidOperationException("SMTP_PASSWORD não definida.");
+    EmailSender emailSender = await CreateEmailSenderAsync();
 
     // Obtém o intervalo de consulta
     string intervalText = Environment.GetEnvironmentVariable("POLL_INTERVAL_SECONDS") ?? "300";
@@ -205,7 +165,6 @@ try
 
     string? apiKey = Environment.GetEnvironmentVariable("BRAPI_API_KEY");
     QuoteClient quoteClient = new QuoteClient(httpClient, apiKey);
-    EmailSender emailSender = new EmailSender(settings, password);
     PriceAlert priceAlert = new PriceAlert(precoVenda, precoCompra);
 
     PriceMonitor monitor = new PriceMonitor(
@@ -243,4 +202,29 @@ catch (Exception ex)
 {
     Logger.Error($"Erro ao iniciar monitoramento: {ex.Message}");
     return 1;
+}
+
+static async Task<EmailSender> CreateEmailSenderAsync()
+{
+    string path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    string json = await File.ReadAllTextAsync(path);
+
+    EmailSettings settings = JsonSerializer.Deserialize<EmailSettings>(json)
+        ?? throw new InvalidOperationException("Configuração SMTP inválida.");
+
+    if (string.IsNullOrWhiteSpace(settings.To) ||
+        string.IsNullOrWhiteSpace(settings.From) ||
+        string.IsNullOrWhiteSpace(settings.Host) ||
+        string.IsNullOrWhiteSpace(settings.Username) ||
+        settings.Port <= 0)
+    {
+        throw new InvalidOperationException("Configuração SMTP inválida.");
+    }
+
+    string? password = Environment.GetEnvironmentVariable("SMTP_PASSWORD");
+
+    if (string.IsNullOrWhiteSpace(password))
+        throw new InvalidOperationException("SMTP_PASSWORD não definida.");
+
+    return new EmailSender(settings, password);
 }

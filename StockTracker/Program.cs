@@ -1,6 +1,8 @@
 ﻿using System.Globalization;
 using System.Text.Json;
-DotNetEnv.Env.Load();
+
+if (File.Exists(".env"))
+    DotNetEnv.Env.Load();
 
 // Teste da lógica de alertas
 if (args.Length == 1 && args[0] == "--test-alerts")
@@ -71,6 +73,11 @@ if (args.Length == 1 && args[0] == "--test-email")
     }
 }
 
+bool simulate = args.Length > 0 && args[0] == "--simulate";
+
+if (simulate)
+    args = args[1..];
+
 // Verifica a quantidade de argumentos
 if (args.Length != 3)
 {
@@ -115,6 +122,47 @@ Console.WriteLine($"Ativo: {ativo}");
 Console.WriteLine($"Preço de venda: R$ {precoVenda:F2}");
 Console.WriteLine($"Preço de compra: R$ {precoCompra:F2}");
 
+
+if (simulate)
+{
+    decimal middle = precoCompra + (precoVenda - precoCompra) / 2m;
+
+    decimal[] prices =
+    {
+        middle,
+        precoVenda * 1.01m,
+        precoVenda * 1.02m,
+        middle,
+        precoCompra * 0.99m,
+        precoCompra * 0.98m,
+        middle,
+        precoVenda * 1.01m
+    };
+
+    int index = 0;
+
+    PriceMonitor monitor = new PriceMonitor(
+        ativo,
+        new PriceAlert(precoVenda, precoCompra),
+        TimeSpan.FromSeconds(1),
+
+        () => Task.FromResult(prices[index++]),
+
+        (subject, body) =>
+        {
+            Console.WriteLine($"\n--- E-MAIL SIMULADO ---\nAssunto: {subject}\n{body}\n----------------------\n");
+            return Task.CompletedTask;
+        }
+    );
+
+    Logger.Info("Simulação iniciada (sem API e sem SMTP).");
+
+    await monitor.RunAsync(CancellationToken.None, prices.Length);
+
+    Logger.Info("Simulação concluída.");
+
+    return 0;
+}
 
 try
 {

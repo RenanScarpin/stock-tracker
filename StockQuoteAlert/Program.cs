@@ -1,5 +1,50 @@
 ﻿using System.Globalization;
 using System.Text.Json;
+DotNetEnv.Env.Load();
+
+
+if (args.Length == 1 && args[0] == "--test-email")
+{
+    try
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        string json = await File.ReadAllTextAsync(path);
+
+        EmailSettings? settings = JsonSerializer.Deserialize<EmailSettings>(json);
+
+        if (settings is null ||
+            string.IsNullOrWhiteSpace(settings.To) ||
+            string.IsNullOrWhiteSpace(settings.From) ||
+            string.IsNullOrWhiteSpace(settings.Host) ||
+            string.IsNullOrWhiteSpace(settings.Username) ||
+            settings.Port <= 0)
+        {
+            throw new InvalidOperationException("Configuração SMTP inválida.");
+        }
+
+        string? password = Environment.GetEnvironmentVariable("SMTP_PASSWORD");
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new InvalidOperationException("Variável SMTP_PASSWORD não definida.");
+        }
+
+        EmailSender sender = new EmailSender(settings, password);
+
+        await sender.SendAsync(
+            "Teste StockQuoteAlert",
+            "Este é um e-mail de teste do StockQuoteAlert."
+        );
+
+        Console.WriteLine("Mensagem aceita pelo servidor SMTP.");
+        return 0;
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Erro ao enviar e-mail: {ex.Message}");
+        return 1;
+    }
+}
 
 // Verifica a quantidade de argumentos
 if (args.Length != 3)

@@ -2,7 +2,32 @@
 using System.Text.Json;
 DotNetEnv.Env.Load();
 
+// Teste da lógica de alertas
+if (args.Length == 1 && args[0] == "--test-alerts")
+{
+    PriceAlert alert = new PriceAlert(22.67m, 22.59m);
 
+    decimal[] prices =
+    {
+        22.63m, 22.68m, 22.70m,
+        22.67m, 22.59m, 22.58m,
+        22.57m, 22.63m, 22.68m
+    };
+
+    foreach (decimal price in prices)
+    {
+        AlertType action = alert.CheckPrice(price);
+
+        Console.WriteLine($"Preço: {price:F2} | Alerta: {action}");
+
+        if (action != AlertType.None)
+            alert.MarkAsSent();
+    }
+
+    return 0;
+}
+
+// Teste de envio de e-mail
 if (args.Length == 1 && args[0] == "--test-email")
 {
     try

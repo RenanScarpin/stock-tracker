@@ -116,39 +116,76 @@ Console.WriteLine($"Preço de venda: R$ {precoVenda:F2}");
 Console.WriteLine($"Preço de compra: R$ {precoCompra:F2}");
 
 
-using HttpClient httpClient = new HttpClient();
-httpClient.Timeout = TimeSpan.FromSeconds(10);
-
-QuoteClient quoteClient = new QuoteClient(httpClient);
-
 try
 {
-    Console.WriteLine("\nConsultando cotação...");
+    // Carrega as configurações SMTP
+    string path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+    string json = await File.ReadAllTextAsync(path);
 
-    decimal cotacao = await quoteClient.GetPriceAsync(ativo);
+    EmailSettings settings = JsonSerializer.Deserialize<EmailSettings>(json)
+        ?? throw new InvalidOperationException("Configuração SMTP inválida.");
 
-    Console.WriteLine($"Cotação atual: R$ {cotacao:F2}");
+    if (string.IsNullOrWhiteSpace(settings.To) ||
+        string.IsNullOrWhiteSpace(settings.From) ||
+        string.IsNullOrWhiteSpace(settings.Host) ||
+        string.IsNullOrWhiteSpace(settings.Username) ||
+        settings.Port <= 0)
+    {
+        throw new InvalidOperationException("Configuração SMTP inválida.");
+    }
+
+    string? password = Environment.GetEnvironmentVariable("SMTP_PASSWORD");
+
+    if (string.IsNullOrWhiteSpace(password))
+        throw new InvalidOperationException("SMTP_PASSWORD não definida.");
+
+    // Obtém o intervalo de consulta
+    string intervalText = Environment.GetEnvironmentVariable("POLL_INTERVAL_SECONDS") ?? "300";
+
+    if (!int.TryParse(intervalText, out int seconds) || seconds <= 0)
+        throw new InvalidOperationException("Intervalo de consulta inválido.");
+
+    // Cria os componentes
+    using HttpClient httpClient = new HttpClient();
+    httpClient.Timeout = TimeSpan.FromSeconds(10);
+
+    QuoteClient quoteClient = new QuoteClient(httpClient);
+    EmailSender emailSender = new EmailSender(settings, password);
+    PriceAlert priceAlert = new PriceAlert(precoVenda, precoCompra);
+
+    PriceMonitor monitor = new PriceMonitor(
+        quoteClient,
+        priceAlert,
+        emailSender,
+        ativo,
+        TimeSpan.FromSeconds(seconds)
+    );
+
+    // Configura o encerramento com Ctrl+C
+    using CancellationTokenSource cancellation = new CancellationTokenSource();
+
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        cancellation.Cancel();
+    };
+
+    Console.WriteLine("\nMonitoramento iniciado. Pressione Ctrl+C para encerrar.\n");
+
+    try
+    {
+        await monitor.RunAsync(cancellation.Token);
+    }
+    catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+    {
+        // Encerramento solicitado pelo usuário
+    }
+
+    Console.WriteLine("Monitoramento encerrado.");
+    return 0;
 }
-catch (HttpRequestException ex)
+catch (Exception ex)
 {
-    Console.Error.WriteLine($"Erro na requisição: {ex.Message}");
+    Console.Error.WriteLine($"Erro ao iniciar monitoramento: {ex.Message}");
     return 1;
 }
-catch (TaskCanceledException)
-{
-    Console.Error.WriteLine("Erro: tempo limite da consulta excedido.");
-    return 1;
-}
-catch (JsonException)
-{
-    Console.Error.WriteLine("Erro: resposta JSON inválida.");
-    return 1;
-}
-catch (InvalidOperationException ex)
-{
-    Console.Error.WriteLine($"Erro: {ex.Message}");
-    return 1;
-}
-
-return 0;
-

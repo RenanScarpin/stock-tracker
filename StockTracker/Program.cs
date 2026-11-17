@@ -59,8 +59,8 @@ if (args.Length == 1 && args[0] == "--test-email")
         EmailSender sender = new EmailSender(settings, password);
 
         await sender.SendAsync(
-            "Teste StockQuoteAlert",
-            "Este é um e-mail de teste do StockQuoteAlert."
+            "Teste StockTracker",
+            "Este é um e-mail de teste do StockTracker."
         );
 
         Console.WriteLine("Mensagem aceita pelo servidor SMTP.");
@@ -81,7 +81,7 @@ if (simulate)
 // Verifica a quantidade de argumentos
 if (args.Length != 3)
 {
-    Console.Error.WriteLine("Uso: StockQuoteAlert <ativo> <preco_venda> <preco_compra>");
+    Console.Error.WriteLine("Uso: StockTracker <ativo> <preco_venda> <preco_compra>");
     return 1;
 }
 

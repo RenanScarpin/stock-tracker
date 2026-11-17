@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Text.Json;
 
 // Verifica a quantidade de argumentos
 if (args.Length != 3)
@@ -44,4 +45,40 @@ Console.WriteLine($"Ativo: {ativo}");
 Console.WriteLine($"Preço de venda: R$ {precoVenda:F2}");
 Console.WriteLine($"Preço de compra: R$ {precoCompra:F2}");
 
+
+using HttpClient httpClient = new HttpClient();
+httpClient.Timeout = TimeSpan.FromSeconds(10);
+
+QuoteClient quoteClient = new QuoteClient(httpClient);
+
+try
+{
+    Console.WriteLine("\nConsultando cotação...");
+
+    decimal cotacao = await quoteClient.GetPriceAsync(ativo);
+
+    Console.WriteLine($"Cotação atual: R$ {cotacao:F2}");
+}
+catch (HttpRequestException ex)
+{
+    Console.Error.WriteLine($"Erro na requisição: {ex.Message}");
+    return 1;
+}
+catch (TaskCanceledException)
+{
+    Console.Error.WriteLine("Erro: tempo limite da consulta excedido.");
+    return 1;
+}
+catch (JsonException)
+{
+    Console.Error.WriteLine("Erro: resposta JSON inválida.");
+    return 1;
+}
+catch (InvalidOperationException ex)
+{
+    Console.Error.WriteLine($"Erro: {ex.Message}");
+    return 1;
+}
+
 return 0;
+
